@@ -186,3 +186,5 @@ pyenv/
 *.log
 *.tmp
 
+# data
+**/*data*/
