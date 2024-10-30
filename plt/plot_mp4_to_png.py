@@ -71,7 +71,6 @@ def extract_and_concatenate_frames(
 
         # Convert the concatenated image (numpy array) to a PIL Image
         concatenated_image = Image.fromarray(concatenated_image)
-
     elif layout == "grid":
         # Check if the number of frames can form a perfect square
         m = int(np.sqrt(len(frames)))
@@ -125,6 +124,7 @@ def process_folder(
     show_image=True,
     max_images=None,
     layout="horizontal",
+    output_dir=None  # 新增的参数用于指定输出路径
 ):
     # Check if the folder exists
     if not os.path.exists(folder_path):
@@ -145,7 +145,7 @@ def process_folder(
     # If max_images is provided and already enough images exist, skip generation
     if max_images is not None and len(existing_images) >= max_images:
         print(f"Found {len(existing_images)} images, no need to generate more.")
-        compose_images(folder_path, existing_images[:max_images], max_images)
+        compose_images(folder_path, existing_images[:max_images], max_images, output_dir)
         return
 
     # Create a list to store paths of all newly generated images
@@ -170,14 +170,18 @@ def process_folder(
 
     # If images were generated, concatenate them vertically
     if all_images:
-        compose_images(folder_path, all_images, max_images)
+        compose_images(folder_path, all_images, max_images, output_dir)
 
 
-def compose_images(folder_path, image_paths, max_images=None):
-    # Create the 'images_compose' folder inside the 'images' folder
-    images_dir = os.path.join(folder_path, "images")
-    images_compose_dir = os.path.join(images_dir, "images_compose")
-    os.makedirs(images_compose_dir, exist_ok=True)
+def compose_images(folder_path, image_paths, max_images=None, output_dir=None):
+    # Create the 'images_compose' folder inside the 'images' folder, unless output_dir is provided
+    if output_dir is None:
+        images_dir = os.path.join(folder_path, "images")
+        images_compose_dir = os.path.join(images_dir, "images_compose")
+        os.makedirs(images_compose_dir, exist_ok=True)
+    else:
+        images_compose_dir = output_dir  # Use the provided output directory
+        os.makedirs(images_compose_dir, exist_ok=True)
 
     # If max_images is provided and fewer images exist, select only the specified number of images
     if max_images is not None and len(image_paths) > max_images:
@@ -218,11 +222,11 @@ if __name__ == "__main__":
     show_image = False  # Set to True to display the generated image
     max_images = 10  # Change this to control the number of images to be concatenated
     layout = "horizontal"  # Use 'horizontal' for horizontal arrangement or 'grid' for m x m grid arrangement
-    # layout = "grid"  # Use 'horizontal' for horizontal arrangement or 'grid' for m x m grid arrangement
+    output_dir = "/home/qiao/Projects/pytools/data/plot"  # Set a custom output directory, or leave None
 
     # Check if the input is a directory or a file
     if os.path.isdir(input_path):
-        process_folder(input_path, n, decay_factor, show_image, max_images, layout)
+        process_folder(input_path, n, decay_factor, show_image, max_images, layout, output_dir)
     elif os.path.isfile(input_path) and input_path.lower().endswith(".mp4"):
         # For individual MP4 files, only generate images but don't compose vertically
         extract_and_concatenate_frames(input_path, n, decay_factor, show_image, layout)
