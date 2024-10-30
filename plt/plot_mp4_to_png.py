@@ -3,7 +3,7 @@ import numpy as np
 import os
 from matplotlib import pyplot as plt
 from datetime import datetime
-from PIL import Image, ImageOps
+from PIL import Image, ImageOps  # 使用PIL进行图片操作
 
 
 def extract_and_concatenate_frames(
@@ -68,6 +68,10 @@ def extract_and_concatenate_frames(
     if layout == "horizontal":
         # Concatenate frames horizontally (left to right)
         concatenated_image = np.hstack(frames)
+
+        # Convert the concatenated image (numpy array) to a PIL Image
+        concatenated_image = Image.fromarray(concatenated_image)
+
     elif layout == "grid":
         # Check if the number of frames can form a perfect square
         m = int(np.sqrt(len(frames)))
@@ -207,12 +211,14 @@ def compose_images(folder_path, image_paths, max_images=None):
 
 # Example usage
 if __name__ == "__main__":
-    input_path = "/home/qiao/Downloads/real_word_exp/grasp-movie.mp4"
-    n = 9
-    decay_factor = 0.95
+    # input_path = "/home/qiao/Downloads/real_word_exp/grasp-movie.mp4"
+    input_path = "/home/qiao/Projects/GraspDiffusionNetwork/grasp_diffusion_network/scripts/eval/checkpoints_evaluations_trash/GraspGeneratorDiffusionEuclidean/1730121411/grasp_generation_animations"
+    n = 10
+    decay_factor = 0.1
     show_image = False  # Set to True to display the generated image
-    max_images = 5  # Change this to control the number of images to be concatenated
-    layout = "grid"  # Use 'horizontal' for horizontal arrangement or 'grid' for m x m grid arrangement
+    max_images = 10  # Change this to control the number of images to be concatenated
+    layout = "horizontal"  # Use 'horizontal' for horizontal arrangement or 'grid' for m x m grid arrangement
+    # layout = "grid"  # Use 'horizontal' for horizontal arrangement or 'grid' for m x m grid arrangement
 
     # Check if the input is a directory or a file
     if os.path.isdir(input_path):
