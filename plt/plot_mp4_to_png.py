@@ -220,7 +220,7 @@ if __name__ == "__main__":
     n = 10
     decay_factor = 0.1
     show_image = False  # Set to True to display the generated image
-    max_images = 10  # Change this to control the number of images to be concatenated
+    max_images = 5  # Change this to control the number of images to be concatenated
     layout = "horizontal"  # Use 'horizontal' for horizontal arrangement or 'grid' for m x m grid arrangement
     output_dir = "/home/qiao/Projects/pytools/data/plot"  # Set a custom output directory, or leave None
 
