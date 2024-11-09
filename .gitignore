@@ -188,3 +188,6 @@ pyenv/
 
 # data
 **/*data*/
+
+# output
+**/*output*/
