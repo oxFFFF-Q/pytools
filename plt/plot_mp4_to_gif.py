@@ -1,58 +1,231 @@
 import ffmpeg
-import os
+from pathlib import Path
+from PIL import Image
+import tempfile
 
-def mp4_to_gif(input_path: str, output_path: str, fps: int = 10, scale: int = 640, loop: int = 0):
-    """
-    将 MP4 文件转换为 GIF 动图。
-    
-    参数：
-    - input_path: str，输入的 MP4 文件的绝对路径
-    - output_path: str，输出的 GIF 文件路径
-    - fps: int，指定的帧率 (默认 10)
-    - scale: int，指定 GIF 的宽度，保持高度按比例缩放 (默认 640)
-    - loop: int，GIF 循环次数 (0 表示无限循环)
-    """
-    
-    # 检查输入文件是否存在
-    if not os.path.exists(input_path):
-        raise FileNotFoundError(f"输入文件 {input_path} 不存在")
-    
-    # 创建 FFmpeg 转换流
-    try:
-        # 使用 filter 生成调色板
-        palette_path = output_path.replace('.gif', '_palette.png')
-        (
-            ffmpeg
-            .input(input_path)
-            .filter('fps', fps)
-            .filter('scale', scale, -1, flags='lanczos')
-            .output(palette_path, vf='palettegen')
-            .run(quiet=True)
+
+def mp4_to_gif(
+    input_folder: str,
+    output_folder: str,
+    fps: int = 10,
+    scale: int = 320,
+    colors: int = 128,
+    loop: int = 0,
+    hold_last_frame: float = 1.0,
+    frame_duration: int = 20,
+    generate_individual: bool = True,
+    rows: int = 1,
+    cols: int = 1,
+):
+    input_folder = Path(input_folder)
+    output_folder = Path(output_folder)
+    output_folder.mkdir(parents=True, exist_ok=True)
+
+    if generate_individual:
+        for mp4_file in input_folder.glob("*.mp4"):
+            convert_single_mp4_to_gif(
+                mp4_file,
+                output_folder,
+                fps,
+                scale,
+                colors,
+                loop,
+                hold_last_frame,
+                frame_duration,
+            )
+    else:
+        output_folder_merge = output_folder / "merge"
+        output_folder_merge.mkdir(parents=True, exist_ok=True)
+        mp4_to_merged_gif(
+            input_folder,
+            output_folder_merge,
+            fps,
+            scale,
+            colors,
+            loop,
+            hold_last_frame,
+            frame_duration,
+            rows,
+            cols,
         )
 
-        # 使用生成的调色板转换为 GIF
-        (
-            ffmpeg
-            .input(input_path)
-            .filter('fps', fps)
-            .filter('scale', scale, -1, flags='lanczos')
-            .input(palette_path)
-            .filter('paletteuse')
-            .output(output_path, loop=loop)
-            .run(quiet=True)
+
+def mp4_to_merged_gif(
+    input_folder: str,
+    output_folder: str,
+    fps: int,
+    scale: int,
+    colors: int,
+    loop: int,
+    hold_last_frame: float,
+    frame_duration: int,
+    rows: int,
+    cols: int,
+):
+    input_folder = Path(input_folder)
+    output_folder = Path(output_folder)
+
+    mp4_files = list(input_folder.glob("*.mp4"))
+    required_count = rows * cols
+    if len(mp4_files) < required_count:
+        raise ValueError(
+            f"Insufficient number of MP4 files in the folder, {required_count} needed, but only {len(mp4_files)} found."
         )
 
-        # 删除临时的调色板文件
-        os.remove(palette_path)
-        print(f"转换成功！GIF 已保存至 {output_path}")
-    except ffmpeg.Error as e:
-        print(f"转换失败: {e.stderr.decode()}")
+    mp4_files = mp4_files[:required_count]
+    all_frames = []
+    all_durations = []
+    last_frames = []
 
-# 使用示例
+    # Extract frames from each MP4 file and load into memory
+    for mp4_file in mp4_files:
+        frames, durations, last_frame = extract_frames_from_mp4(
+            mp4_file, fps, scale, colors, frame_duration, hold_last_frame
+        )
+        all_frames.append(frames)
+        all_durations.append(durations)
+        last_frames.append(last_frame)  # Collect the last frame of each video
+
+    max_frames = max(len(frames) for frames in all_frames)
+    grid_frames = []
+    grid_durations = []
+
+    for i in range(max_frames):
+        grid_frame_images = []
+        current_durations = []
+        for idx, frames in enumerate(all_frames):
+            img = frames[i % len(frames)]
+            grid_frame_images.append(img)
+            current_durations.append(all_durations[idx][i % len(frames)])
+
+        grid_width = grid_frame_images[0].width * cols
+        grid_height = grid_frame_images[0].height * rows
+        grid_image = Image.new("RGBA", (grid_width, grid_height))
+
+        for r in range(rows):
+            for c in range(cols):
+                img = grid_frame_images[r * cols + c]
+                grid_image.paste(img, (c * img.width, r * img.height))
+
+        grid_frames.append(grid_image)
+        grid_durations.append(max(current_durations))
+
+    # Set hold time for the last frame
+    grid_durations[-1] = int(hold_last_frame * 1000)
+
+    output_path = (
+        output_folder
+        / f"merged_{rows * cols}_gifs_hold_{int(hold_last_frame*1000)}ms.gif"
+    )
+    grid_frames[0].save(
+        output_path,
+        save_all=True,
+        append_images=grid_frames[1:],
+        duration=grid_durations,
+        loop=loop,
+    )
+
+    print(f"Successfully created merged GIF grid! Saved to {output_path}")
+
+
+def convert_single_mp4_to_gif(
+    mp4_path: Path,
+    output_folder: str,
+    fps: int,
+    scale: int,
+    colors: int,
+    loop: int,
+    hold_last_frame: float,
+    frame_duration: int,
+):
+    base_name = mp4_path.stem
+    output_path = os.path.join(output_folder, f"{base_name}.gif")
+
+    with tempfile.NamedTemporaryFile(suffix=".gif", delete=True) as temp_gif:
+        try:
+            ffmpeg.input(str(mp4_path), r=fps).output(
+                temp_gif.name,
+                vf=f"fps={fps},scale={scale}:-1:flags=lanczos,split[s0][s1];[s0]palettegen=max_colors={colors}[p];[s1][p]paletteuse=dither=bayer:bayer_scale=5",
+                loop=loop,
+            ).run(quiet=True, overwrite_output=True)
+
+            frames, durations, last_frame = load_frames_from_gif(
+                temp_gif.name, frame_duration, hold_last_frame
+            )
+
+            frames[0].save(
+                output_path,
+                save_all=True,
+                append_images=frames[1:],
+                duration=durations,
+                loop=loop,
+            )
+            print(f"Single GIF generated successfully! Saved to {output_path}")
+        except ffmpeg.Error as e:
+            print(f"Conversion failed: {e.stderr.decode()}")
+
+
+def load_frames_from_gif(gif_path, frame_duration, hold_last_frame):
+    frames = []
+    durations = []
+    last_frame = None
+    with Image.open(gif_path) as img:
+        for i in range(img.n_frames):
+            img.seek(i)
+            frame = img.copy()
+            frames.append(frame)
+            durations.append(frame_duration)
+            last_frame = frame  # Record the last frame
+
+    durations[-1] = int(hold_last_frame * 1000)  # Set hold time for the last frame
+    return frames, durations, last_frame
+
+
+def extract_frames_from_mp4(
+    mp4_path, fps, scale, colors, frame_duration, hold_last_frame
+):
+    with tempfile.NamedTemporaryFile(
+        suffix=".gif", delete=True
+    ) as temp_gif, tempfile.NamedTemporaryFile(
+        suffix=".png", delete=True
+    ) as last_frame_file:
+
+        try:
+            ffmpeg.input(str(mp4_path), r=fps).output(
+                temp_gif.name,
+                vf=f"fps={fps},scale={scale}:-1:flags=lanczos,split[s0][s1];[s0]palettegen=max_colors={colors}[p];[s1][p]paletteuse=dither=bayer:bayer_scale=5",
+            ).run(quiet=True, overwrite_output=True)
+
+            ffmpeg.input(str(mp4_path), ss="999999", r=1).output(
+                last_frame_file.name, vframes=1
+            ).run(quiet=True, overwrite_output=True)
+
+            frames, durations, last_frame = load_frames_from_gif(
+                temp_gif.name, frame_duration, hold_last_frame
+            )
+
+            # Load the last frame image
+            with Image.open(last_frame_file.name) as img:
+                last_frame = img.copy()
+
+            return frames, durations, last_frame
+
+        except ffmpeg.Error as e:
+            print(f"Failed to extract frames from MP4: {e.stderr.decode()}")
+            return [], [], None
+
+
+# Example code
 mp4_to_gif(
-    input_path='/home/qiao/Projects/pytools/data/real_word_mp4/grasp-movie (1).mp4',  # 输入 MP4 文件路径
-    output_path='/path/to/output.gif', # 输出 GIF 文件路径
-    fps=10,  # GIF 帧率
-    scale=1320,  # GIF 宽度（高度自动按比例缩放）
-    loop=0   # GIF 循环次数 (0 为无限循环)
+    input_folder="/home/qiao/Projects/pytools/data/gdn_grasps",  # Path to input MP4 folder
+    output_folder="/home/qiao/Projects/pytools/output/gifs/gdn_grasps",  # Path to output GIF folder
+    fps=5,
+    scale=320,
+    colors=128,
+    loop=0,
+    hold_last_frame=0.5,
+    frame_duration=20,
+    generate_individual=False,  # True for individual GIFs, False for merged grid GIF
+    rows=4,
+    cols=6,
 )
