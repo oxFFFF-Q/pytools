@@ -12,15 +12,11 @@ def log_time(label, time_elapsed):
     - label: str, description of the timing data.
     - time_elapsed: float, the elapsed time to log.
     """
-
     file_path = "/home/qiao/Projects/pytools/data/time_take/se3dif_grasp_timing_log.txt"
     with open(file_path, "a") as f:  # Open in append mode
         f.write(f"{label}: {time_elapsed}\n")  # Write timing data
     print("%" * 50, "saved timing data to", file_path)
 
-import matplotlib.pyplot as plt
-import numpy as np
-import os
 
 def plot_time_statistics(input_path, selected_labels=None, layout="horizontal"):
     """
@@ -34,15 +30,23 @@ def plot_time_statistics(input_path, selected_labels=None, layout="horizontal"):
     """
     # Get list of txt file paths
     if os.path.isdir(input_path):
-        file_paths = [os.path.join(input_path, f) for f in os.listdir(input_path) if f.endswith(".txt")]
+        file_paths = [
+            os.path.join(input_path, f)
+            for f in os.listdir(input_path)
+            if f.endswith(".txt")
+        ]
     elif os.path.isfile(input_path) and input_path.endswith(".txt"):
         file_paths = [input_path]
     else:
-        raise ValueError("Invalid path. Please provide a path to a .txt file or a directory containing .txt files.")
+        raise ValueError(
+            "Invalid path. Please provide a path to a .txt file or a directory containing .txt files."
+        )
 
     # Check selected_labels parameter
     if selected_labels is not None:
-        if not isinstance(selected_labels, list) or not all(isinstance(label, str) for label in selected_labels):
+        if not isinstance(selected_labels, list) or not all(
+            isinstance(label, str) for label in selected_labels
+        ):
             raise ValueError("selected_labels should be a list of strings or None.")
 
     # Initialize dictionary to store times for each category
@@ -50,14 +54,18 @@ def plot_time_statistics(input_path, selected_labels=None, layout="horizontal"):
     model_names = []  # Store model names for legend
 
     # Read each file and populate time_data list
-    min_length = float('inf')  # Track the minimum number of entries across files
+    min_length = float("inf")  # Track the minimum number of entries across files
     for file_path in file_paths:
-        model_name = os.path.splitext(os.path.basename(file_path))[0]  # Use file name as model name
+        model_name = os.path.splitext(os.path.basename(file_path))[
+            0
+        ]  # Use file name as model name
         model_names.append(model_name)
 
-        with open(file_path, 'r') as f:
+        with open(file_path, "r") as f:
             lines = f.readlines()
-            file_times = []  # Store timing data for each selected label in the current file
+            file_times = (
+                []
+            )  # Store timing data for each selected label in the current file
             for line in lines:
                 label, time_str = line.strip().split(": ")
                 time_value = float(time_str)
@@ -73,6 +81,11 @@ def plot_time_statistics(input_path, selected_labels=None, layout="horizontal"):
     # Trim each time series to the minimum length
     time_data = [times[:min_length] for times in time_data]
 
+    # Limit data to the first 50 iterations for display
+    max_iterations = 50
+    time_data = [times[:max_iterations] for times in time_data]
+    min_length = min(min_length, max_iterations)
+
     # Set up subplots layout based on the layout parameter
     if layout == "horizontal":
         fig, axes = plt.subplots(1, 2, figsize=(14, 6))
@@ -84,35 +97,52 @@ def plot_time_statistics(input_path, selected_labels=None, layout="horizontal"):
     # Left (or top) plot: Average timing per iteration
     for i, times in enumerate(time_data):
         avg_times = np.cumsum(times) / np.arange(1, min_length + 1)
-        axes[0].plot(avg_times, label=model_names[i], linewidth=2)
-    axes[0].set_xlabel("Iteration", fontsize=12, fontweight='bold')
-    axes[0].set_ylabel("Average Time (s)", fontsize=12, fontweight='bold')
-    axes[0].set_title("Grasp Generation Time (Average)", fontsize=14, fontweight='bold')
+        axes[0].plot(
+            range(1, min_length + 1), avg_times, label=model_names[i], linewidth=2
+        )
+    axes[0].set_xlabel("Iteration", fontsize=12, fontweight="bold")
+    axes[0].set_ylabel("Average Time (s)", fontsize=12, fontweight="bold")
+    axes[0].set_title("Grasp Generation Time (Average)", fontsize=14, fontweight="bold")
 
     # Right (or bottom) plot: Cumulative timing
     for i, times in enumerate(time_data):
         cumulative_times = np.cumsum(times)
-        axes[1].plot(cumulative_times, label=model_names[i], linewidth=2)
-    axes[1].set_xlabel("Iteration", fontsize=12, fontweight='bold')
-    axes[1].set_ylabel("Cumulative Time (s)", fontsize=12, fontweight='bold')
-    axes[1].set_title("Grasp Generation Time (Cumulative)", fontsize=14, fontweight='bold')
-    
+        axes[1].plot(
+            range(1, min_length + 1),
+            cumulative_times,
+            label=model_names[i],
+            linewidth=2,
+        )
+    axes[1].set_xlabel("Iteration", fontsize=12, fontweight="bold")
+    axes[1].set_ylabel("Cumulative Time (s)", fontsize=12, fontweight="bold")
+    axes[1].set_title(
+        "Grasp Generation Time (Cumulative)", fontsize=14, fontweight="bold"
+    )
+
     # Unified legend with bold and larger font size, position adjusted for layout
     if layout == "horizontal":
-        axes[1].legend(loc='upper center', bbox_to_anchor=(0.5, -0.15), ncol=2, frameon=False,
-                       prop={'size': 11, 'weight': 'bold'})
+        axes[1].legend(
+            loc="upper center",
+            bbox_to_anchor=(0.5, -0.15),
+            ncol=2,
+            frameon=False,
+            prop={"size": 11, "weight": "bold"},
+        )
     else:
-        axes[1].legend(loc='upper center', bbox_to_anchor=(0.5, -0.25), ncol=2, frameon=False,
-                       prop={'size': 11, 'weight': 'bold'})
+        axes[1].legend(
+            loc="upper center",
+            bbox_to_anchor=(0.5, -0.25),
+            ncol=2,
+            frameon=False,
+            prop={"size": 11, "weight": "bold"},
+        )
 
     plt.tight_layout(rect=[0, 0, 1, 0.95])
     plt.show()
 
 
-
-
 if __name__ == "__main__":
     input_path = "/home/qiao/Projects/pytools/data/time_take"
     selected_labels = ["t_grasp_generator_total"]
-    lay_out = "vertical"
+    lay_out = "horizontal"
     plot_time_statistics(input_path, selected_labels, layout=lay_out)

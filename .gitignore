@@ -191,3 +191,6 @@ pyenv/
 
 # output
 **/*output*/
+
+*copy*.py
+
